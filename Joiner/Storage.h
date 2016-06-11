@@ -1,4 +1,7 @@
 //---------------------------------------------------------------------------
+// Storage.h
+// author: vsovchinnikov
+//---------------------------------------------------------------------------
 #ifndef StorageH
 #define StorageH
 
@@ -295,6 +298,8 @@ public:
     AnsiString GetTable();
 
 private:
+    void OpenExcel();
+
     std::vector<TExcelField> Fields;
     std::vector<TExcelTable> Tables;    // Список полей для экспрта
 
@@ -303,6 +308,7 @@ private:
     Variant Workbook;
     Variant Range;
     std::map<AnsiString, int> FieldsList;   // Список полей
+             
 };
 
 

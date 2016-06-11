@@ -8,42 +8,23 @@
 #include <StdCtrls.hpp>
 #include <Forms.hpp>
 #include <ComCtrls.hpp>
+#include "appver.h"
 #include "TransferModule.h"
 #include "Logger.h"
-#include "encoder.h"
-#include "xmlutil.h"
-#include <Dialogs.hpp>
-#include <Menus.hpp>
 
-                     
 
 //---------------------------------------------------------------------------
 class TForm1 : public TForm
 {
 __published:	// IDE-managed Components
-    TButton *ButtonStart;
-    TButton *OpenConfigButton;
-    TRichEdit *LogRichEdit;
-    TOpenDialog *OpenDialog1;
-    TPopupMenu *PopupMenu1;
-    TMenuItem *N1;
-    TButton *ExitButton;
-    void __fastcall ButtonStartClick(TObject *Sender);
-    void __fastcall OpenConfigButtonClick(TObject *Sender);
-    void __fastcall LogRichEditContextPopup(TObject *Sender,
-          TPoint &MousePos, bool &Handled);
-    void __fastcall N1Click(TObject *Sender);
-    void __fastcall ExitButtonClick(TObject *Sender);
+    TButton *Button1;
+    TButton *Button2;
+    TRichEdit *RichEdit1;
     void __fastcall FormCreate(TObject *Sender);
-    void __fastcall FormActivate(TObject *Sender);
-private:
-    TLogger* Logger;
-    TCommandLine* CommandLine;
-    void UpdateInterface();
-    void ShowCode(int ScopeType);
-    void StartTransfer();
-
-public:
+    void __fastcall Button1Click(TObject *Sender);
+    void __fastcall Button2Click(TObject *Sender);
+private:	// User declarations
+public:		// User declarations
     __fastcall TForm1(TComponent* Owner);
     TTransferModule TransferModule;
 };

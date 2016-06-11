@@ -5,46 +5,37 @@
 #include <Classes.hpp>
 #include <Controls.hpp>
 #include <ComCtrls.hpp>
-#include <fstream>
 
-class TLogger;  // опережающее объ€вление
+class Singleton;  // опережающее объ€вление
 
 
-class TLoggerDestroyer
+class SingletonDestroyer
 {
 private:
-    TLogger* p_instance;
+    Singleton* p_instance;
 public:    
-    ~TLoggerDestroyer();
-    void initialize( TLogger* p );
-
-
-
+    ~SingletonDestroyer();
+    void initialize( Singleton* p );
 };
-
-class TLogger
+  
+class Singleton
 {
-
 private:
-    static TLogger* p_instance;
-    static TLoggerDestroyer destroyer;
+    static Singleton* p_instance;
+    static SingletonDestroyer destroyer;
 
-    TRichEdit* LogEditPtr;  // ”казатель на лог-RichEdit
-    std::FILE* LogFilePtr;  // ”казатель на лог-файл
-    TStringList* LogHist;      // »стори€ лог-сообщений
-
+    TRichEdit* LogEdit;
 protected:
-    TLogger();
-    ~TLogger();
-    friend class TLoggerDestroyer;      // for access to p_instance
-
+    Singleton() { }
+    Singleton( const Singleton& );
+    Singleton& operator=( Singleton& );
+    ~Singleton() { }
+    friend class SingletonDestroyer;
 public:
-    static TLogger& getInstance();
+    static Singleton& getInstance();
 
     int __fastcall WriteLog(AnsiString MessageStr, int LineNumber = -1);
-    void __fastcall AddConsole(TRichEdit* Edit);
-    void __fastcall AddConsole(AnsiString LogFileName, bool Rewrite = false);
-
+    void __fastcall SetControl(TRichEdit* Edit);
 };
 
 

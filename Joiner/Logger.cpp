@@ -1,111 +1,129 @@
 #include "Logger.h"
 
-TLogger* TLogger::p_instance = 0;
-TLoggerDestroyer TLogger::destroyer;
+Singleton* Singleton::p_instance = 0;
+SingletonDestroyer Singleton::destroyer;
 
 //---------------------------------------------------------------------------
-// Singleton
-TLoggerDestroyer::~TLoggerDestroyer()
+//
+SingletonDestroyer::~SingletonDestroyer()
 {
     delete p_instance;
 }
 
 //---------------------------------------------------------------------------
-// Singleton
-void TLoggerDestroyer::initialize(TLogger* p)
+//
+void SingletonDestroyer::initialize(Singleton* p)
 {
     p_instance = p;
 }
 
 //---------------------------------------------------------------------------
-// Singleton
-TLogger& TLogger::getInstance()
+//
+Singleton& Singleton::getInstance()
 {
     if(!p_instance) {
-        p_instance = new TLogger();
-        destroyer.initialize(p_instance);
+        p_instance = new Singleton();
+        destroyer.initialize(p_instance);     
     }
     return *p_instance;
 }
 
 //---------------------------------------------------------------------------
-//
-TLogger::TLogger()
+// Вывод лог-строки
+int __fastcall Singleton::WriteLog(AnsiString MessageStr, int LineNumber)
 {
-    LogEditPtr = NULL;
-    LogFilePtr = NULL;
-    LogHist = new TStringList();
+    AnsiString sDate = FormatDateTime("hh:mm:ss", Now());
 
+    if (LogEdit) {
+        MessageStr = "[" + sDate + "] " + MessageStr;
+        if (LineNumber == -1) {
+            LineNumber = LogEdit->Lines->Add(MessageStr);
+        } else {
+            LogEdit->Lines->Strings[LineNumber] = MessageStr;
+        }
+        Application->ProcessMessages();
+    }
+    return LineNumber;
 }
 
 //---------------------------------------------------------------------------
 //
-TLogger::~TLogger()
+void __fastcall Singleton::SetControl(TRichEdit* Edit)
 {
-    fclose(LogFilePtr);
-    LogFilePtr = NULL;
-
-    delete LogHist;
-    LogHist = NULL;
+    LogEdit = Edit;
 }
+
+
+
+
+
+
+
+
+
+
+
+//Singleton * Singleton::p_instance = 0;
+
+/*
 
 //---------------------------------------------------------------------------
 // Вывод лог-строки
 int __fastcall TLogger::WriteLog(AnsiString MessageStr, int LineNumber)
 {
     AnsiString sDate = FormatDateTime("hh:mm:ss", Now());
-    MessageStr = "[" + sDate + "] " + MessageStr;
 
-    LogHist->Add(MessageStr);   // Добавляем строку в историю
-
-    if (LogEditPtr) {
+    if (LogEdit) {
+        MessageStr = "[" + sDate + "] " + MessageStr;
         if (LineNumber == -1) {
-            LineNumber = LogEditPtr->Lines->Add(MessageStr);
+            LineNumber = LogEdit->Lines->Add(MessageStr);
         } else {
-            LogEditPtr->Lines->Strings[LineNumber] = MessageStr;
+            LogEdit->Lines->Strings[LineNumber] = MessageStr;
         }
-        LogEditPtr->Update();
         Application->ProcessMessages();
-    }
-    if (LogFilePtr) {
-        fprintf(LogFilePtr,  "%s\n", MessageStr);
     }
     return LineNumber;
 }
 
 //---------------------------------------------------------------------------
-// Устанавливает активный контрол для вывода информации
-// Если сохранилась история, то выводит ее
-void __fastcall TLogger::AddConsole(TRichEdit* Edit)
+// Вывод лог-строки
+/*int __fastcall TTransferModule::WriteLog(AnsiString MessageStr, TColor Color, int LineNumber)
 {
-    LogEditPtr = Edit;
 
-    // Выводим историю
-    if (LogHist->Count > 0)
-        LogEditPtr->Lines->AddStrings(LogHist);
-}
+    LogEdit->SelAttributes->Color = Color;
+    //SQLTextRichEdit->SelAttributes->Style = SQLTextRichEdit->SelAttributes->Style >> fsBold;
 
-//---------------------------------------------------------------------------
-// Устанавливает активный файл для вывода информации
-// Если сохранилась история, то выводит ее
-void __fastcall TLogger::AddConsole(AnsiString LogFileName, bool Rewrite)
-{
-    if (Rewrite)
-        LogFilePtr = std::fopen(LogFileName.c_str(), "wt");
-    else
-        LogFilePtr = std::fopen(LogFileName.c_str(), "at");
 
-    // Выводим историю
-    for (int i=0; i < LogHist->Count; i++) {
-        fprintf(LogFilePtr,  "%s\n", LogHist->Strings[i]);
+    AnsiString sDate = FormatDateTime("hh:mm:ss", Now());
+
+    if (LogEdit) {
+        MessageStr = "[" + sDate + "] " + MessageStr;
+        if (LineNumber == -1) {
+            LineNumber = LogEdit->Lines->Add(MessageStr);
+        } else {
+            LogEdit->Lines->Strings[LineNumber] = MessageStr;
+            //LogEdit->Lines->;
+            //            LogEdit->Lines
+            //int SelStart = SendMessage(LogEdit, EM_LINEINDEX, LineNumber - 1, 0);
+
+
+            //LogEdit->SelStart = 0;
+
+            //LogEdit->SelText = LogEdit->Lines->Strings[LineNumber];
+
+            //LogEdit->SelLength = LogEdit->Lines->Strings[LineNumber].Length();
+            //LogEdit->SelAttributes->Color = Color;
+
+
+            //LogEdit->SelLength = LogEdit->Lines->Strings[LineNumber].Length();
+            //int h = SendMessage(LogEdit, EM_LINEINDEX, LineNumber - 1, 0);
+            //SelLength := Length(Lines[ARow - 1]);
+            //SelAttributes.Color := AColor;
+            //SelLength := 0;
+
+        }
+        Application->ProcessMessages();
     }
-}
+    return LineNumber;
+} */
 
-
-
-
-
-//---------------------------------------------------------------------------
-//---------------------------------------------------------------------------
-//---------------------------------------------------------------------------
-//
