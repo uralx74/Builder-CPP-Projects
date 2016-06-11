@@ -4,20 +4,18 @@
 
 #include "c:\PROGRS\current\util\taskutils.h"
 #include "c:\PROGRS\current\util\appver.h"
+#include "c:\PROGRS\current\util\MSExcelWorks.h"
 #include "c:\PROGRS\current\util\MSXMLWorks.h"
 #include "c:\PROGRS\current\util\appver.h"
 #include "c:\PROGRS\current\util\CommandLine.h"
 #include <ComCtrls.hpp>
 #include "Storage.h"
 #include "Logger.h"
-#include "encoder.h"
 
 //---------------------------------------------------------------------------
 class TTransferModule
 {
 private:	// User declarations
-    TCommandLine* CommandLine;
-    TLogger* Logger;
 public:		// User declarations
     __fastcall TTransferModule();
 
@@ -30,6 +28,11 @@ public:		// User declarations
     TStorage* SrcStor;
     TStorage* DstStor;
 
+
+
+
+    //Singleton& Logger;
+    Singleton* Logger;
 };
 
 //---------------------------------------------------------------------------

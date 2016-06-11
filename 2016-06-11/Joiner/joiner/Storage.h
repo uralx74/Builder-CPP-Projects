@@ -2,8 +2,8 @@
 #ifndef StorageH
 #define StorageH
 
+
 #include <vector>
-#include <map>
 #include "Ora.hpp"
 #include "dbf.hpp"
 #include "Dbf_Lang.hpp"
@@ -11,12 +11,14 @@
 #include <ComCtrls.hpp>
 #include "DBAccess.hpp"
 #include "MemDS.hpp"
-#include "c:\PROGRS\current\util\MSExcelWorks.h"
-      
 
-//---------------------------------------------------------------------------
-// Структуры для полей
-//---------------------------------------------------------------------------
+
+typedef enum {
+    SS_EMPTY = 0,
+    SS_FILE_NOT_FOUND,  // SS_TABLE_NOT_FOUND
+    SS_FILE_IS_OPENED,
+    SS_FIELD_NOT_FOUND
+} TSTORAGESTATUS;
 
 //---------------------------------------------------------------------------
 // Структура для хранения параметров поля (столбца) DBASE
@@ -35,38 +37,25 @@ typedef struct {    // Для описания структуры dbf-файла
     // Memo	  10
     // Numeric	1-30
     // Decimals is 0 for non-numeric, number of decimals for numeric.
-} TDbaseField;
+} TDBaseField;
 
-// Структура для хранения параметров полей в Oracle (процедуры/таблицы)
+// Структура для хранения параметров Полей процедуры
 typedef struct {    // Для описания структуры dbf-файла
     String name;    // Имя поля (до 10 символов).
     bool active;        // Признак необходимости заполненеия поля (если false, поле создается, но не заполняется)
     bool enable;        // Признак того, необходимо ли вообще учитывать это поле (если false, поле не создается)
     String name_src;    // Имя поля из копируемой БД
-} TOraField;
-
-//---------------------------------------------------------------------------
-// Структура для хранения полей в MS Excel
-typedef struct {    // Для описания структуры dbf-файла
-    String name;    // Имя поля (до 10 символов).
-    bool active;        // Признак необходимости заполненеия поля (если false, поле создается, но не заполняется)
-    bool enable;        // Признак того, необходимо ли вообще учитывать это поле (если false, поле не создается)
-    String name_src;    // Имя поля из копируемой БД
-    String format;      // Формат ячейки в MS Excel
-} TExcelField;
+} TOraProcField;
 
 
-
-
-//---------------------------------------------------------------------------
-// Структуры для хранения таблиц
-//---------------------------------------------------------------------------
-
-// Структура для хранения параметров
+// Возможно обьединить эти структуры в одну
+// Структура для хранения таблицы
 typedef struct {
-    AnsiString File;
-    bool Truncate;
-} TDbaseTable;
+    AnsiString Server;
+    AnsiString Username;
+    AnsiString Password;
+    AnsiString Table;     // Имя таблицы
+} TOraTableTable;
 
 // Структура для хранения параметров
 typedef struct {
@@ -83,16 +72,9 @@ typedef struct {
     AnsiString Server;
     AnsiString Username;
     AnsiString Password;
-    AnsiString Sql;     // Имя файла с Sql-запросом
-    AnsiString Table;   // Имя таблицы (используется если нужно предварительно очистить)
-    bool Truncate;
+    AnsiString Sql;     // Тект Sql-запроса
 } TOraSqlTable;
 
-// Структура для хранения параметров
-typedef struct {
-    AnsiString File;
-    bool Truncate;
-} TExcelTable;
 
 //---------------------------------------------------------------------------
 // class TStorage
@@ -102,8 +84,10 @@ class TStorage
 {
 public:
     TStorage();
-    virtual void Open() {};
+    //virtual void Create() = 0;
+    virtual bool Open(bool ReadOnly = true) {};
     virtual Variant Get(AnsiString Field) {};
+    //virtual void Set(AnsiString Field, Variant Value) = 0;
     virtual void Set(Variant Value) {};
     virtual void Commit() {};
     virtual void Append() {};   // Добавляет пустую запись перед (используется в DBase)
@@ -118,17 +102,18 @@ public:
     virtual void NextRecord() {};
     virtual void NextField();
 
-    virtual AnsiString GetSrcField() = 0;   // Возвращает имя сопоставленного поля в источнике
+    virtual AnsiString GetSrcField() = 0;
     virtual bool IsActiveField() = 0;
-    virtual bool IsActiveTable() { return Active; };
-    virtual bool IsModified() { return Modified; };
-    virtual void SetReadOnly(bool ReadOnlyFlag){ this->ReadOnly = ReadOnlyFlag; };
-    virtual int GetRecordCount(){ return RecordCount; };
-     
+
     // Информационные функции
-    virtual AnsiString GetTable() = 0;     // Возвращает наименование активного хранилища данных
-    virtual AnsiString GetTableStage();     // Возвращает текущий этап обработки данных
-      
+    virtual AnsiString GetTable() = 0;     // Возвращает наименование активного источника/приемника данных
+    //virtual AnsiString GetRecord() = 0;     //
+    virtual TSTORAGESTATUS GetStatus() { return StorageStatus;};     //
+
+
+
+    //virtual void dial(char *number) { cout << «????? ?????? » << number << endl; }
+
 protected:
     int TableIndex;
     int TableCount;
@@ -136,10 +121,8 @@ protected:
     int FieldIndex;
     int RecordCount;
     int RecordIndex;
-    bool Active;    // Признак того, что источник/приемник открыт и готов к считыванию/записи данных
-    bool ReadOnly;
-    bool Modified;
-    //TSTORAGESTATUS StorageStatus;
+
+    TSTORAGESTATUS StorageStatus;
 };
 
 
@@ -153,14 +136,17 @@ class TStorageDbase: TStorage
 {
 public:
     TStorageDbase();
-    void Open();
+    void Create();
+    bool Open(bool ReadOnly = true);
     Variant Get(AnsiString Field);
     void Set(Variant Value);
     void Commit();
     void Append();
     void Close();
 
+    //bool Eot();     // End Of Tables
     bool Eor();     // End Of Records
+    //bool Eof();     // End Of Fields
 
     void NextTable();
     void NextRecord();
@@ -169,17 +155,22 @@ public:
     AnsiString GetSrcField();
     bool IsActiveField();
 
-    void AddField(const TDbaseField& Field);
-    void AddTable(const TDbaseTable& Table);
+
+    void AddTable(AnsiString FileName);
 
     AnsiString GetTable();
-private:
-    void Create();  // Создает файл DBF
-    std::vector<TDbaseTable> Tables;    // Список полей для экспрта в файл DBF
-    std::vector<TDbaseField> Fields;
 
-    TDbf* pTable;   // Текущее хранилище
+    std::vector<TDBaseField> Fields;
+private:
+    //AnsiString file;
+    std::vector<AnsiString> Tables;    // Список полей для экспрта в файл DBF
+    TDbf* pTable;
 };
+
+
+
+
+
 
 
 
@@ -191,10 +182,39 @@ private:
 class TStorageOra: public TStorage
 {
 public:
+ /*   virtual void Create() = 0;
+    virtual void Open() {};
+    virtual Variant Get(AnsiString Field) {};
+    //virtual void Set(AnsiString Field, Variant Value) = 0;
+    virtual void Set(Variant Value) = 0;
+    virtual void Commit() {};
+    virtual void Append() {};   // Добавляет пустую запись перед (используется в DBase)
+    virtual void Post() {};     // Фиксирует запись (используется в OraProc)
+    virtual void Close() = 0;
+
+    virtual bool Eot() {};     // End Of Tables
+    virtual bool Eor() {};     // End Of Records
+    virtual bool Eof() = 0;     // End Of Fields
+
+    virtual void NextTable() {};
+    virtual void NextRecord() {};
+    virtual void NextField() = 0;
+
+    virtual AnsiString GetSrcField() = 0;
+    virtual bool IsActiveField() = 0;
+
+    // Информационные функции
+    virtual AnsiString GetTable() = 0;     // Возвращает наименование активного источника/приемника данных
+    //virtual AnsiString GetRecord() = 0;     //
+
+*/
+
+    //virtual void dial(char *number) { cout << «????? ?????? » << number << endl; }
     void Close();
-    
-protected:
-    ~TStorageOra();
+
+    //AnsiString Server;
+    //AnsiString Username;    // Имя пользователя БД
+    //AnsiString Password;    // Пароль пользователя БД
 
 protected:
     void OpenConnection(AnsiString Server, AnsiString Username, AnsiString Password);
@@ -211,70 +231,67 @@ protected:
 class TStorageOraProc: public TStorageOra
 {
 public:
-    TStorageOraProc() {};
-    void Open();
+    TStorageOraProc();
+    ~TStorageOraProc();
+
+    //void Create();
+    bool Open(bool ReadOnly = true);
     //Variant Get(AnsiString Field);
+
     void Set(Variant Value);
+    //void Commit();
     void Post();
+
+    //bool Eot();     // End Of Tables
+    //bool Eor();     // End Of Records
+    bool Eof();     // End Of Fields
+
+    //void NextTable();
+    //void NextRecord();
     void NextField();
+
     AnsiString GetSrcField();
     bool IsActiveField();
-    void AddField(const TOraField& Field);
     void AddTable(const TOraProcTable& Table);
     AnsiString GetTable();
+
+
+
+    std::vector<TOraProcField> Fields;      // Список полей процедуры
+
 private:
-    std::vector<TOraField> Fields;      // Список полей процедуры
-    std::vector<TOraProcTable> Tables;    // Список таблиц (процедур)
+    std::vector<TOraProcTable> Tables;    // Список полей для экспрта в файл DBF
+
+    //int TableIndex;
+    //int FieldIndex;
+
 };
 
 
 
+
+
 //---------------------------------------------------------------------------
-// class TStorageOraSql: TStorage
+// class TStorageOraTable: TStorage
 // Класс объекта источника/приемника данных
 // Используется таблица в БД Oracle
 //---------------------------------------------------------------------------
-class TStorageOraSql: public TStorageOra
+class TStorageOraTable: public TStorageOra
+
 {
 public:
-    TStorageOraSql() {};
-    void Open();
-    Variant Get(AnsiString Field);      // Возвращает значение по имени поля
-    void Set(Variant Value);      // Устанавливает значение активного поля
-    void Append();
-    void Commit();
-    void Post();
-    bool Eor();     // End Of Records
-    void NextTable();
-    void NextRecord();
-    AnsiString GetSrcField();
-    bool IsActiveField();
-    void AddField(const TOraField& Field);
-    void AddTable(const TOraSqlTable &Table);
-    AnsiString GetTable();
-private:
-    std::vector<TOraField> Fields;
-    std::vector<TOraSqlTable> Tables;    // Список полей для экспрта в файл DBF
-};
+    TStorageOraTable();
+    ~TStorageOraTable();
 
-
-//---------------------------------------------------------------------------
-// class TStorageExcel: TStorage
-// Класс объекта источника/приемника данных
-// Используется таблица, хранимая в файле MS Excel
-//---------------------------------------------------------------------------
-
-class TStorageExcel: TStorage
-{
-public:
-    TStorageExcel(){};
-    ~TStorageExcel();
-    void Open();
+    //void Create();
+    bool Open(bool ReadOnly);
     Variant Get(AnsiString Field);
+
     void Set(Variant Value);
-    void Commit();
     void Append();
-    void Close();
+    void Commit();
+    //void Post();
+    //void Close();
 
     //bool Eot();     // End Of Tables
     bool Eor();     // End Of Records
@@ -286,24 +303,68 @@ public:
 
 
     AnsiString GetSrcField();
-    bool IsActiveField() {};
+    bool IsActiveField();
 
-
-    void AddField(const TExcelField& Field);
-    void AddTable(const TExcelTable& Table);
+    void AddTable(const TOraTableTable &Table);
 
     AnsiString GetTable();
 
-private:
-    std::vector<TExcelField> Fields;
-    std::vector<TExcelTable> Tables;    // Список полей для экспрта
+ 
 
-    MSExcelWorks* msexcel;
-    Variant Worksheet;
-    Variant Workbook;
-    Variant Range;
-    std::map<AnsiString, int> FieldsList;   // Список полей
+    //bool Truncate;
+    AnsiString Table;
+
+
+    std::vector<TOraProcField> Fields;
+
+private:
+    std::vector<TOraTableTable> Tables;    // Список полей для экспрта в файл DBF
 };
+
+
+
+
+//---------------------------------------------------------------------------
+// class TStorageOraSql: TStorage
+// Класс объекта источника/приемника данных
+// Используется таблица в БД Oracle
+//---------------------------------------------------------------------------
+class TStorageOraSql: public TStorageOra
+{
+public:
+    TStorageOraSql();
+    ~TStorageOraSql();
+
+    //void Create();
+    bool Open(bool ReadOnly = true);
+
+    Variant Get(AnsiString Field);
+
+    //void Set(Variant Value);
+    void Commit();
+    void Post();
+
+    bool Eor();     // End Of Records
+
+    void NextTable();
+    void NextRecord();
+
+    AnsiString GetSrcField();
+    bool IsActiveField();
+
+
+    void AddTable(const TOraSqlTable &Table);
+
+    AnsiString GetTable();
+                
+    //bool Truncate;
+
+    std::vector<TOraProcField> Fields;
+
+private:
+    std::vector<TOraSqlTable> Tables;    // Список полей для экспрта в файл DBF
+};
+
 
 
 //---------------------------------------------------------------------------
