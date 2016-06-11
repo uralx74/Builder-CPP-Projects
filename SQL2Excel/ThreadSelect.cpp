@@ -617,7 +617,8 @@ void __fastcall ThreadSelect::ExportToExcel(TOraQuery *OraQuery)
 	    }
         VarArrayUnlock(data_body);
        try {
-            Workbook = msexcel.OpenExcel();
+            msexcel.OpenApplication();
+            Workbook = msexcel.OpenDocument();
         } catch (Exception &e) {
             VarClear(data_head);
             VarClear(data_body);
@@ -748,7 +749,7 @@ void __fastcall ThreadSelect::ExportToExcel(TOraQuery *OraQuery)
         if (DstFileName == "") {
             msexcel.SetVisible(Workbook);
         } else {
-            msexcel.SaveAsDocument(Workbook, DstFileName);
+            msexcel.SaveDocument(Workbook, DstFileName);
             msexcel.CloseApplication();
             vResultFiles.push_back(DstFileName);
         }
@@ -791,7 +792,8 @@ void __fastcall ThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQ
     Variant Worksheet;
 
     try {
-        Workbook = msexcel.OpenExcel(TemplateFullName);
+        msexcel.OpenApplication();
+        Workbook = msexcel.OpenDocument(TemplateFullName);
         Worksheet = msexcel.GetSheet(Workbook, 1);
     } catch (Exception &e) {
         try {
@@ -830,7 +832,7 @@ void __fastcall ThreadSelect::ExportToExcelTemplate(TOraQuery *QueryTable, TOraQ
         msexcel.SetVisible(Workbook);
     } else {                        // иначе сохраняем в файл
         try {
-            msexcel.SaveAsDocument(Workbook, DstFileName);
+            msexcel.SaveDocument(Workbook, DstFileName);
             msexcel.CloseApplication();
             vResultFiles.push_back(DstFileName);
         } catch (Exception &e) {

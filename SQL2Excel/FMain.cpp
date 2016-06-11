@@ -80,13 +80,13 @@ TColor __fastcall TForm1::ColorByIndex(int index)
 __fastcall TForm1::~TForm1()
 {
     delete OdacLog;
-    //delete threadopt;
 }
 
 //---------------------------------------------------------------------------
 //
 void __fastcall TForm1::FormCreate(TObject *Sender)
 {
+
     m_sessions.push_back(EsaleSession);
     m_sessions.push_back(CCBSession);
     m_sessions.push_back(DBYYSession);
@@ -2225,6 +2225,24 @@ void __fastcall TForm1::FormShow(TObject *Sender)
     BitBtn1->Top = ParamsLV->Top + ParamsLV->Height;
     BitBtn2->Top = BitBtn1->Top;
     FormResize(NULL);
+
+
+
+
+
+ /*   /// Проверка!!!!!
+    ShortDateFormat = "dd.mm.yyyy";
+    DateSeparator = '.';
+
+
+    DateTime_SetFormat(DateTimePicker1->Handle, "dd.mm.yyyy");
+    DateTime_SetFormat((hwndDT : THandle; //YourDateTimePicker.Handle
+lpzsFormat : PChar)
+    //DateTimePicker1->DateFormat.
+
+     // Don't show the seconds, Sekunden nicht anzeigen
+    SendMessage(DateTimePicker1->Handle, DTM_SETFORMAT, 0, long(PChar("dd.mm.yyyy")));
+ */
 }
 
 //---------------------------------------------------------------------------
