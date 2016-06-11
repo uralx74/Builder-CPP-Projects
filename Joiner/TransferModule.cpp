@@ -13,7 +13,8 @@ __fastcall TTransferModule::TTransferModule()
 // Запуск
 void __fastcall TTransferModule::Start()
 {
-    Logger = &Singleton::getInstance();
+    Logger = &TLogger::getInstance();
+    CommandLine = &TCommandLine::getInstance();
 
     if (LoadParameters()) {
         Transfer(SrcStor, DstStor);
@@ -52,6 +53,8 @@ void __fastcall TTransferModule::Transfer(TStorage* Src, TStorage* Dst)
         if (!Src->IsActiveTable()) {
             try {
                 Src->NextTable();
+                if (Src->Eot())
+                    break;
             } catch (Exception &e) {
                 Logger->WriteLog("Ошибка в источнике \"" + Src->GetTable() + "\". " + e.Message);
                 continue;
@@ -68,16 +71,14 @@ void __fastcall TTransferModule::Transfer(TStorage* Src, TStorage* Dst)
                 Dst->Append();
 
                 while(!Dst->Eof()) {    // Цикл по столбцам в приемнике
-                    //AnsiString ssssss = Dst->GetSrcField();
                     if (Dst->IsActiveField()) {
                         try {
-                            Variant val = Src->Get( Dst->GetSrcField() );
-                            Dst->Set(val);
+                            Variant Value = Src->Get( Dst->GetSrcField() );
+                            Dst->Set(Value);
                         } catch (Exception &e) {
                             Logger->WriteLog("Ошибка в источнике \"" + Src->GetTable() + "\" (" + Src->GetTableStage() + ")" + ". " + e.Message /*+ Dst->GetSrcField()*/, log_n);
                             throw Exception("");
                         }
-                        //Dst->Set( Src->Get( Dst->GetSrcField() ));
                     }
                     Dst->NextField();
                 }
@@ -91,16 +92,9 @@ void __fastcall TTransferModule::Transfer(TStorage* Src, TStorage* Dst)
             // Проверять, был ли хоть один Commit в приемнике
             // может быть использовать RecordIndex или RecordCount
             int LoadedRecordsCount = Dst->GetRecordCount() - DstRecordCount;
+
             Logger->WriteLog("Загружено " + IntToStr(LoadedRecordsCount) + " записей из \"" + Src->GetTable() + "\"", log_n);
             DstRecordCount = Dst->GetRecordCount();
-
-            /*if (LoadedRecordsCount > 0) {
-                //Logger->WriteLog("Загружен " + Src->GetTable(), log_n);
-                Logger->WriteLog("Загружен " + Src->GetTable(), log_n);
-                DstRecordCount = Dst->GetRecordCount();
-            } else {
-                Logger->WriteLog("Загружено 0 записей из " + Src->GetTable(), log_n);
-            }*/
 
         } catch (Exception &e) {
             if (e.Message != "")
@@ -115,30 +109,27 @@ void __fastcall TTransferModule::Transfer(TStorage* Src, TStorage* Dst)
         }
     }
 
-    отладить здесь
-    TDateTime StopTime = EncodeDate(2016, 05, 23);
-    //TDateTime StopTime = Now() ;
+    // Формируем строку - секундомер
+    TDateTime StopTime = Now() ;
     int TotalSec = SecsPerDay * (StopTime - StartTime);
-    int dd = TotalSec/SecsPerDay;
-    int hh = (TotalSec - dd * 24 * 3600) / 3600;
-    int mm = (TotalSec / 60) % 60;
+    int hh = (TotalSec ) / 3600;
+    int mm = (TotalSec - hh * 3600) / 60;
     int ss = TotalSec % 60;
     AnsiString sTotalTime = IntToStr(ss) + " сек";
-    if (hh+dd+mm > 0)
+    if (mm > 0)
         sTotalTime = IntToStr(mm) + " мин " + sTotalTime;
-    if (hh+dd > 0)
+    if (hh > 0)
         sTotalTime = IntToStr(hh) + " час " + sTotalTime;
-    if (dd > 0)
-        sTotalTime = IntToStr(dd) + " ден " + sTotalTime;
 
-
-
+ 
     int DstRecordCountTotal = Dst->GetRecordCount() - DstRecordCountFirst;
+
     // Проверять, был ли хоть один Commit в приемнике
     // может быть использовать RecordIndex или RecordCount
     if (Dst->IsModified())
         Logger->WriteLog("Всего загружено " + IntToStr(DstRecordCountTotal) + " записей за " + sTotalTime+ ". Результат сохранен в \"" + Dst->GetTable() + "\"");
 
+        
     Src->Close();
     Dst->Close();
 
@@ -157,14 +148,13 @@ bool __fastcall TTransferModule::LoadParameters()
     AnsiString clDstUsername;  // Имя пользователя базы данных
     AnsiString clDstPassword;  // Пароль к базе данных
 
-    TCommandLine commandline;
-    clConfig = commandline.GetValue("-config","-c");
-    clDstUsername = commandline.GetValue("-dstuser","-du");
-    clDstPassword = commandline.GetValue("-dstpassword","-dp");
-    clSrcUsername = commandline.GetValue("-srcuser","-su");
-    clSrcPassword = commandline.GetValue("-srcpassword","-sp");
-    //clLogfile = commandline.GetValue("-logfile","-l");
-    //clSilent = commandline.GetValue("-silent","-s");
+    clConfig = CommandLine->GetValue("-config","-c");
+    clDstUsername = CommandLine->GetValue("-dstuser","-du");
+    clDstPassword = CommandLine->GetValue("-dstpassword","-dp");
+    clSrcUsername = CommandLine->GetValue("-srcuser","-su");
+    clSrcPassword = CommandLine->GetValue("-srcpassword","-sp");
+    //clLogfile = CommandLine->GetValue("-logfile","-l");
+    //clSilent = CommandLine->GetValue("-silent","-s");
 
     // Преобразовываем относительный путь к файлу в абсолютный путь
     clConfig = ExpandFileName(clConfig);
@@ -176,6 +166,7 @@ bool __fastcall TTransferModule::LoadParameters()
         return false;
     }
 
+    CoInitialize(NULL);
     MSXMLWorks msxml;
     msxml.LoadXMLFile(clConfig);
 
@@ -216,10 +207,29 @@ bool __fastcall TTransferModule::LoadParameters()
                         Table.Server = msxml.GetAttributeValue(subnode, "server");
 
                         // В дальнейшем переделать. 1. Командная строка приоритетней; 2. Шифрование-дешифрование
-                        Table.Username = msxml.GetAttributeValue(subnode, "username", clSrcUsername);
-                        Table.Password = msxml.GetAttributeValue(subnode, "password", clSrcPassword);
-                        //Table.Username = clSrcUsername;
-                        //Table.Password = clSrcPassword;
+                        // Тоже самое в OraProc и в приемник
+
+                        // Если задано имя пользователя и пароль в командной строке
+                        if (clSrcUsername != "" || clSrcPassword != "") {
+                            Table.Username = clSrcUsername;
+                            Table.Password = clSrcPassword;
+                        } else {
+                            AnsiString code = msxml.GetAttributeValue(subnode, "code");
+                            if (code != "") {
+                                TEncoder encoder;
+                                try {
+                                    encoder.Decode(code, Table.Username, Table.Password );
+                                } catch (...) {
+                                    Logger->WriteLog("Ошибка. Не удалось расшифровать пароль к источнику \"" + Table.Server + "\"");
+                                    return false;
+                                }
+                            } else {    // Если задано не зашифрованное значение
+                                Table.Username = msxml.GetAttributeValue(subnode, "username");
+                                Table.Password = msxml.GetAttributeValue(subnode, "password", clSrcPassword);
+                            }
+                        }
+
+
                         if (sImportType == "orasql")
                             Table.Sql = ExpandFileName(msxml.GetAttributeValue(subnode, "sql"));
                         Table.Table = msxml.GetAttributeValue(subnode, "table");
@@ -278,8 +288,28 @@ bool __fastcall TTransferModule::LoadParameters()
 
                 TOraProcTable Table;
                 Table.Server = msxml.GetAttributeValue(subnode, "server");
-                Table.Username = clDstUsername;
-                Table.Password = clDstPassword;
+
+                //!!! Фрагмент дублируется - необходим рефакторинг!
+                // Если задано имя пользователя и пароль в командной строке
+                if (clSrcUsername != "" || clSrcPassword != "") {
+                    Table.Username = clSrcUsername;
+                    Table.Password = clSrcPassword;
+                } else {
+                    AnsiString code = msxml.GetAttributeValue(subnode, "code");
+                    if (code != "") {
+                        TEncoder encoder;
+                        try {
+                            encoder.Decode(code, Table.Username, Table.Password );
+                        } catch (...) {
+                            Logger->WriteLog("Ошибка. Не удалось расшифровать пароль к источнику \"" + Table.Server + "\"");
+                            return false;
+                        }
+                    } else {    // Если задано не зашифрованное значение
+                        Table.Username = msxml.GetAttributeValue(subnode, "username");
+                        Table.Password = msxml.GetAttributeValue(subnode, "password", clSrcPassword);
+                    }
+                }
+
                 Table.Procedure = msxml.GetAttributeValue(subnode, "procedure");
                 Table.Table = msxml.GetAttributeValue(subnode, "table");
                 Table.Truncate = msxml.GetAttributeValue(subnode, "truncate", false);
@@ -312,8 +342,28 @@ bool __fastcall TTransferModule::LoadParameters()
 
                 TOraSqlTable Table;
                 Table.Server = msxml.GetAttributeValue(subnode, "server");
-                Table.Username = clDstUsername;
-                Table.Password = clDstPassword;
+
+
+                // Если задано имя пользователя и пароль в командной строке
+                if (clSrcUsername != "" || clSrcPassword != "") {
+                    Table.Username = clSrcUsername;
+                    Table.Password = clSrcPassword;
+                } else {
+                    AnsiString code = msxml.GetAttributeValue(subnode, "code");
+                    if (code != "") {
+                        TEncoder encoder;
+                        try {
+                            encoder.Decode(code, Table.Username, Table.Password );
+                        } catch (...) {
+                            Logger->WriteLog("Ошибка. Не удалось расшифровать пароль к источнику \"" + Table.Server + "\"");
+                            return false;
+                        }
+                    } else {    // Если задано не зашифрованное значение
+                        Table.Username = msxml.GetAttributeValue(subnode, "username");
+                        Table.Password = msxml.GetAttributeValue(subnode, "password", clSrcPassword);
+                    }
+                }
+
                 Table.Sql = ""; // Важно!
                 Table.Table = msxml.GetAttributeValue(subnode, "table");
                 Table.Truncate = msxml.GetAttributeValue(subnode, "truncate", false);
@@ -364,6 +414,7 @@ bool __fastcall TTransferModule::LoadParameters()
 
     Logger->WriteLog("Файл конфигурации загружен " + clConfig, LogLine);
     return true;
+
 }
 
 

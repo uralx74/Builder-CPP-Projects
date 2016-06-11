@@ -181,21 +181,20 @@ Variant TStorageDbase::Get(AnsiString Field)
     try {
         return pTable->FieldByName(Field)->Value;
     } catch (...) {
-        //StorageStatus = SS_FIELD_NOT_FOUND;
         throw Exception("Field not found " + Field + ".");
     }
 }
 
 //---------------------------------------------------------------------------
 // Устанавливает значение активного поля
-//void TStorageDbase::Set(AnsiString Field, Variant Value)
 void TStorageDbase::Set(Variant Value)
 {
-
-    if (Fields[FieldIndex].active && Fields[FieldIndex].enable)
-        pTable->FieldByName(Fields[FieldIndex].name)->Value = Value;
-    //pTable->FieldByNumber(FieldIndex)->Value = Value;
-    //pTable->FieldByName(Field)->Value = Value;
+    if (Fields[FieldIndex].active && Fields[FieldIndex].enable) {
+        if (/*!VarIsEmpty(Value) && !VarIsNull(Value) &&*/ (AnsiString)Value != "")
+                // (AnsiString)Value != "" - Эта проверка критична,
+                // так как в DBF исключено значение NULL
+            pTable->FieldByName(Fields[FieldIndex].name)->Value = Value;
+    }
 }
 
 //---------------------------------------------------------------------------
@@ -318,21 +317,27 @@ AnsiString TStorageDbase::GetTable()
 //
 void TStorageOra::OpenConnection(AnsiString Server, AnsiString Username, AnsiString Password)
 {
-    // Открываем приемник
-    OraSession = new TOraSession(NULL);
-    //ThreadOraSession->OnError = OraSession1Error;
-    OraSession->LoginPrompt = false;
-    OraSession->Password = Password;
-    OraSession->Username = Username;
-    OraSession->Server = Server;
-    //OraSession->Options = TemplateOraSession->Options;
-    //OraSession->HomeName = TemplateOraSession->HomeName;
-    OraSession->Options->Direct = true;
-    OraSession->ConnectMode = cmNormal;
-    OraSession->Pooling = false;
-    OraSession->ThreadSafety = true;
-    OraSession->DataTypeMap->Clear();
-    OraSession->Connect();
+    try {
+        // Открываем приемник
+        OraSession = new TOraSession(NULL);
+        //ThreadOraSession->OnError = OraSession1Error;
+        OraSession->LoginPrompt = false;
+        OraSession->Password = Password;
+        OraSession->Username = Username;
+        OraSession->Server = Server;
+        //OraSession->Options = TemplateOraSession->Options;
+        //OraSession->HomeName = TemplateOraSession->HomeName;
+        OraSession->Options->Direct = true;
+        OraSession->ConnectMode = cmNormal;
+        OraSession->Pooling = false;
+        OraSession->ThreadSafety = true;
+        OraSession->DataTypeMap->Clear();
+        OraSession->Connect();
+    } catch (Exception& e) {
+        delete OraSession;
+        OraSession = NULL;
+        throw Exception("Can't connect to server \"" + Server + "\". " + e.Message);
+    }
 }
 
 //---------------------------------------------------------------------------
@@ -365,12 +370,20 @@ TStorageOra::~TStorageOra()
 // Создание принимающего OraQuery
 void TStorageOraProc::Open()
 {
-    OpenConnection(Tables[TableIndex].Server, Tables[TableIndex].Username, Tables[TableIndex].Password);
+    if (Tables.size()>0)
+        OpenConnection(Tables[TableIndex].Server, Tables[TableIndex].Username, Tables[TableIndex].Password);
+    else
+        throw Exception("Storage is not specified.");
 
-
-   	OraQuery = new TOraQuery(NULL);
-    OraQuery->Session = OraSession;
-    OraQuery->SQL->Clear();
+    try {
+   	    OraQuery = new TOraQuery(NULL);
+        OraQuery->Session = OraSession;
+        OraQuery->SQL->Clear();
+    } catch (...) {
+        delete OraQuery;
+        OraQuery = NULL;
+        throw;
+    }
 
     if (Tables[TableIndex].Truncate) {
         try {
@@ -378,14 +391,18 @@ void TStorageOraProc::Open()
             OraQuery->ExecSQL();
             OraQuery->SQL->Clear();
         } catch (...) {
-            throw Exception("Can't to truncate table " + Tables[TableIndex].Table + ".");
+            delete OraQuery;
+            OraQuery = NULL;
+            throw Exception("Can't truncate table " + Tables[TableIndex].Table + ".");
         }
     }
 
     try {
  	    OraQuery->CreateProcCall(Tables[TableIndex].Procedure, 0);
     } catch (...) {
-        throw Exception("Can't to create procedure call.");
+        delete OraQuery;
+        OraQuery = NULL;
+        throw Exception("Can't create procedure call.");
     }
 
     FieldCount = Fields.size();
@@ -406,6 +423,8 @@ void TStorageOraProc::Post()
 {
     OraQuery->ExecSQL();
     FieldIndex = 0;
+    RecordCount++;
+    Modified = true;
 }
 
 
@@ -454,7 +473,11 @@ AnsiString TStorageOraProc::GetTable()
 {
     //return Procedure;
     if (!Eot()) {
-        return Tables[TableIndex].Procedure;
+        if (Tables[TableIndex].Table != "") {   // Если задана таблица, то возвращаем имя таблицы
+            return Tables[TableIndex].Table;
+        } else {
+            return Tables[TableIndex].Procedure;
+        }
     }
 }
 
@@ -638,6 +661,8 @@ AnsiString TStorageOraSql::GetTable()
         } else {
             return Tables[TableIndex].Table;
         }
+    } else {
+        throw Exception("End of table is reached.");
     }
 }
 
@@ -743,7 +768,7 @@ void TStorageExcel::Open()
         int j = 1;
         String sCellValue;
         while ( (sCellValue = msexcel->ReadCell(Worksheet, 1, j)) != "") {
-            FieldsList[sCellValue] = j;
+            FieldsList[LowerCase(sCellValue)] = j;
             j++;
         }
         FieldCount = j - 1;
@@ -763,12 +788,6 @@ void TStorageExcel::Open()
 }
 
 //---------------------------------------------------------------------------
-//
-void TStorageExcel::OpenExcel()
-{
-}
-
- //---------------------------------------------------------------------------
 // Закрывает таблицу
 void TStorageExcel::Close()
 {
@@ -780,11 +799,14 @@ void TStorageExcel::Close()
     }
 }
 
+//---------------------------------------------------------------------------
+//
 bool TStorageExcel::Eor()
 {
     return RecordIndex >= RecordCount;
 }
 
+//---------------------------------------------------------------------------
 // Возвращает наименование активного источника/приемника данных
 AnsiString TStorageExcel::GetTable()
 {
@@ -797,18 +819,12 @@ AnsiString TStorageExcel::GetTable()
 // Возвращает значение поля
 Variant TStorageExcel::Get(AnsiString Field)
 {
-
+    Field = LowerCase(Field);
     if (FieldsList.find(Field) != FieldsList.end() ) {
-        //int j = FieldsList[Field];
         return msexcel->ReadCell(Worksheet, RecordIndex+2, FieldsList[Field]);
     } else {
         throw Exception("Field not found " + Field + ".");
     }
-/*    try {
-        return pTable->FieldByName(Field)->Value;
-    } catch (...) {
-        throw Exception("Field not found " + Field + ".");
-    }*/
 }
 
 //---------------------------------------------------------------------------
@@ -819,31 +835,17 @@ void TStorageExcel::NextRecord()
         RecordIndex++;
         FieldIndex = 0;
     }
-    //else {
-        //throw Exception("");
-    //}
 }
 
 //---------------------------------------------------------------------------
 // Добавляет новую запись в таблицу
 void TStorageExcel::Append()
 {
-    //pTable->Append();
     RecordIndex = RecordCount;
     RecordCount++;
 
     FieldIndex = 0;
 }
-
-//---------------------------------------------------------------------------
-// Добавляет новую запись в таблицу
-//void TStorageExcel::Append()
-//{
-    //pTable->Append();
-//    RecordCount = RecordIndex;
-//    FieldIndex = 0;
-//}
-
 
 //---------------------------------------------------------------------------
 // Устанавливает значение активного поля
@@ -853,9 +855,6 @@ void TStorageExcel::Set(Variant Value)
         msexcel->WriteToCell(Worksheet, Value, RecordIndex+2, FieldIndex+1, Fields[FieldIndex].format);
         //pTable->FieldByName(Fields[FieldIndex].name)->Value = Value;
     }
-
-    //pTable->FieldByNumber(FieldIndex)->Value = Value;
-    //pTable->FieldByName(Field)->Value = Value;
 }
 
 //---------------------------------------------------------------------------
@@ -867,27 +866,15 @@ void TStorageExcel::AddField(const TExcelField& Field)
 }
 
 //---------------------------------------------------------------------------
-// Фиксирует изменения
+// Фиксирует изменения (сохраняет файл)
 void TStorageExcel::Commit()
 {
-    //Здесь сделать сохранение изменений в файл
+    //Здесь сделать 
     if (ReadOnly)
         return;
 
     msexcel->SaveDocument(Workbook);
     Modified = true;
-
-    /*if (pTable->Modified) {
-        try {
-            pTable->Post();
-            Modified = true;
-            RecordCount = pTable->RecordCount;
-        } catch (...) {
-            throw;
-        }
-    }
-    pTable->Post();
-    */
 }
 
 //---------------------------------------------------------------------------
@@ -896,5 +883,4 @@ AnsiString TStorageExcel::GetSrcField()
 {
     return Fields[FieldIndex].name_src;
 }
-
 
