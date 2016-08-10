@@ -1,7 +1,7 @@
+#include "pch.h"
+#pragma hdrstop
 //---------------------------------------------------------------------------
 
-#include <vcl.h>
-#pragma hdrstop
 
 #include "Unit1.h"
 //---------------------------------------------------------------------------
@@ -18,6 +18,7 @@ __fastcall TForm1::TForm1(TComponent* Owner)
 {
     Logger = &TLogger::getInstance();
     CommandLine = &TCommandLine::getInstance();
+    pTransferThread = NULL;
 }
 
 //---------------------------------------------------------------------------
@@ -62,7 +63,6 @@ void __fastcall TForm1::ButtonStartClick(TObject *Sender)
 // Открыть файл конфигурации
 void __fastcall TForm1::OpenConfigButtonClick(TObject *Sender)
 {
-
     // Опции окна сохранения результов
     OpenDialog1->Options.Clear();
     OpenDialog1->Options << ofFileMustExist;
@@ -92,15 +92,29 @@ void __fastcall TForm1::LogRichEditContextPopup(TObject *Sender,
 // Копирует текст в буффер обмена
 void __fastcall TForm1::N1Click(TObject *Sender)
 {
-    //
     LogRichEdit->CopyToClipboard();
 }
+
 //---------------------------------------------------------------------------
 // Выход из программы
 void __fastcall TForm1::ExitButtonClick(TObject *Sender)
 {
-    Close();    
+    if (pTransferThread != NULL) {
+        if (MessageBoxQuestion("Поток копирования данных активен. Вы уверены, что хотите прервать и закрыть программу?")) {
+            // Прерываем поток, ждем его завершения
+            Logger->WriteLog("Активировано принудительное завершение потока копирования данных.");
+            pTransferThread->Terminate(); // Не реализовано!
+            pTransferThread->WaitFor();
+            //WaitForSingleObject((HANDLE)pTransferThread->Handle, INFINITE);
+        } else {
+            return; // Отмена
+        }
+    }
+
+    // Закрываем программу
+    Close();
 }
+
 //---------------------------------------------------------------------------
 //
 void __fastcall TForm1::FormCreate(TObject *Sender)
@@ -122,9 +136,8 @@ void __fastcall TForm1::FormCreate(TObject *Sender)
     if (ScopeType > -1) {
         ShowCode(ScopeType);
     }
-
-
 }
+
 //---------------------------------------------------------------------------
 //
 void __fastcall TForm1::FormActivate(TObject *Sender)
@@ -135,17 +148,41 @@ void __fastcall TForm1::FormActivate(TObject *Sender)
         StartTransfer();
     }
 }
+
 //---------------------------------------------------------------------------
 // Организовать запуск в отдельном потоке
 void TForm1::StartTransfer()
 {
     OpenConfigButton->Enabled = false;
     ButtonStart->Enabled = false;
-    ExitButton->Enabled = false;
-    TransferModule.Start();
-    //ButtonStart->Enabled = true;
-    ExitButton->Enabled = true;
-    OpenConfigButton->Enabled = true;
+    //ExitButton->Enabled = false;
+    Timer1->Enabled = true;
 
-    UpdateInterface();
+    // hEventTermination = CreateEvent ...
+    pTransferThread = new TTransferThread(true);    // Создаем приостановленный поток
+    pTransferThread->Resume();                   // Запускаем
 }
+
+//---------------------------------------------------------------------------
+// Таймер, отслеживающий завершение потока
+void __fastcall TForm1::Timer1Timer(TObject *Sender)
+{
+    if (pTransferThread != NULL) {
+        if (WaitForSingleObject((HANDLE)pTransferThread->Handle, 0) == WAIT_OBJECT_0) {
+            pTransferThread->Free();
+            pTransferThread = NULL;
+
+            Timer1->Enabled = false;
+
+            OpenConfigButton->Enabled = true;
+
+// ВНИМАНИЕ! ЭТОТ КОД ДОБАВЛЕН ВСПЕШКЕ. ТРЕБУЕТСЯ РЕФАКТОРИНГ!!!!!!!!!!!!!!!
+    if (CommandLine->GetFlag("-ae", "-autoexit")) {
+        this->Close();
+    }
+            UpdateInterface();
+        }
+    }
+}
+//---------------------------------------------------------------------------
+

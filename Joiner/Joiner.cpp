@@ -8,14 +8,17 @@
 #endif
 
 
-#include <vcl.h>
-#include <conio.h>
+#include "pch.h"
+#pragma hdrstop
+
 #include "CommandLine.h"
 #include "Messages.h"
 #include "Logger.h"
+#include "c:\PROGRS\current\util\appver.h"
 #include "TransferModule.h"
 
-#pragma hdrstop
+USEUNIT("pch.cpp");
+
 USERES("Joiner.res");
 USEFORM("Unit1.cpp", Form1);
 USEUNIT("..\util\MSExcelWorks.cpp");
@@ -23,18 +26,49 @@ USEUNIT("..\util\MSXMLWorks.cpp");
 USEUNIT("..\util\CommandLine.cpp");
 USEUNIT("TransferModule.cpp");
 USEUNIT("Storage.cpp");
+USEUNIT("StorageOra.cpp");
+USEUNIT("StorageDbf.cpp");
+USEUNIT("StorageText.cpp");
+USEUNIT("StorageExcel.cpp");
 USEUNIT("Logger.cpp");
 USEUNIT("..\util\VigenereCipher.cpp");
 USEUNIT("..\util\TransposCipher.cpp");
 USEUNIT("Encoder.cpp");
+USEUNIT("TransferThread.cpp");
+USEUNIT("XmlParamsLoader.cpp");
 //---------------------------------------------------------------------------
 WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
 {
-    TLogger* Logger = &TLogger::getInstance();
-    Logger->WriteLog("Joiner " + AppFullVersion + " программа запущена.");
-
-    //TCommandLine commandline;
+   //TCommandLine commandline;
     TCommandLine* cl = &TCommandLine::getInstance();
+    TLogger* Logger = &TLogger::getInstance();
+
+    // Устанавливаем Лог-файл, если задан в параметрах
+    AnsiString sLogFileName = cl->GetValue("-log","-l");
+    if (sLogFileName != "") {
+        try {
+            sLogFileName = ExpandFileName(sLogFileName);
+            Logger->AddConsole(sLogFileName, cl->GetFlag("-logrewrite","-lr")); // Если GetFlag, то лог-файл перезаписывается
+        } catch (...) {
+        }
+    }
+
+
+    Logger->WriteLog("---------------------------------------------------------------------------" );
+    Logger->WriteLog("Joiner " + AppFullVersion);
+    Logger->WriteLog("AppFileName = " + Application->ExeName);
+    //Logger->WriteLog("LogFileName = " + TLogger::GetLogFilename(sLogFileName));
+    Logger->WriteLog("LogFileName = " + Logger->GetLogFilename(sLogFileName));
+
+    Logger->WriteLog("Программа запущена." );
+    //Logger->WriteLog("Полный путь " + Application->ExeName + " .");
+    // Выводить путь
+    // имя компьютера
+    // имя пользователя
+    // Используемые ключи командной строки
+    // путь к Лог-файлу
+
+
 
     // Выводим справку о программе, если требуется
     if (cl->GetFlag("-help","-h")) {
@@ -62,6 +96,7 @@ WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             "\n"
             "\n-s | -silent\tТихий режим"
             "\n-a | -auto\tАвтоматический режим запуска (не требуется с ключем -s)"
+            "\n-ae | -autoexit\tАвтоматический выход из программы после завершения (не требуется с ключем -s)"
             "\n-l | -log = <путь_к_лог_файлу>\tЗадает путь к лог-файлу"
             "\n-lr | -logrewrite \tПерезаписывать лог-файл"
         );
@@ -84,16 +119,6 @@ WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
             "\n e-mail: x74@list.ru"
         );
         return 0;
-    }
-
-    // Устанавливаем Лог-файл, если задан в параметрах
-    AnsiString sLogFileName = cl->GetValue("-log","-l");
-    if (sLogFileName != "") {
-        try {
-            sLogFileName = ExpandFileName(sLogFileName);
-            Logger->AddConsole(sLogFileName, cl->GetFlag("-logrewrite","-lr")); // Если GetFlag, то лог-файл перезаписывается
-        } catch (...) {
-        }
     }
 
     // Выполняем в тихом режиме, если задан ключ
